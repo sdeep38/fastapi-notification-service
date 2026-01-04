@@ -14,15 +14,6 @@ def get_db():
         yield db 
     finally: 
         db.close()
-        
-@router.post("/")
-async def notify(notification: Notification):
-    result = await send_notification(notification)
-    return {"status": "queued", "notification": result}
-
-@router.get("/list") 
-async def list_notifications(): 
-    return [{"id": 1, "user_id": "u123", "message": "Hello"}]
 
 @router.websocket("/ws/{user_id}") 
 async def websocket_endpoint(websocket: WebSocket, user_id: str): 
@@ -44,7 +35,7 @@ def create_notification(notification: Notification, db: Session = Depends(get_db
     db.refresh(db_notification)
     return db_notification
 
-@router.get("/", response_model=list[Notification])
+@router.get("/list", response_model=list[Notification])
 def list_notifications(db: Session = Depends(get_db)):
     return db.query(models.NotificationORM).all()
 
@@ -54,6 +45,21 @@ def get_notification(notification_id: int, db: Session = Depends(get_db)):
     if not n:
         raise HTTPException(status_code=404, detail="Notification not found")
     return n
+
+@router.get("/user/{user_id}")
+def get_user_notifications(user_id: str, db: Session = Depends(get_db)):
+    return db.query(models.NotificationORM).filter(models.NotificationORM.user_id == user_id).all()
+
+@router.put("/{notification_id}/read", response_model=Notification)
+def mark_as_read(notification_id: int, db: Session = Depends(get_db)):
+    notif = db.query(models.NotificationORM).filter(models.NotificationORM.id == notification_id).first()
+    if not notif:
+        raise HTTPException(status_code=404, detail="Notification not found")
+    notif.read = True
+    db.commit()
+    db.refresh(notif)
+    return notif
+
 
 @router.put("/{notification_id}", response_model=Notification)
 def update_notification(notification_id: int, updated: Notification, db: Session = Depends(get_db)):
